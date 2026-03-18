@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VI Payroll Splitter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="logo">
+        <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="56" height="56" rx="12" fill="#1a3a5c" />
+          <rect x="10" y="14" width="36" height="28" rx="3" fill="#2d6a9f" />
+          <rect x="14" y="18" width="28" height="4" rx="1" fill="#ffffff" opacity="0.9" />
+          <rect x="14" y="25" width="18" height="3" rx="1" fill="#ffffff" opacity="0.6" />
+          <rect x="14" y="31" width="22" height="3" rx="1" fill="#ffffff" opacity="0.6" />
+          <rect x="14" y="37" width="14" height="3" rx="1" fill="#ffffff" opacity="0.6" />
+        </svg>
+      </div>
+      <h1>VI Payroll Splitter</h1>
+      <p class="subtitle">Upload your payroll Excel file to split it by VI Teacher</p>
+
+      <div id="error-box" class="error-box" style="display:none;"></div>
+
+      <!-- Upload form -->
+      <div id="upload-section">
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" name="file" id="file-input" accept=".xlsx,.xls" />
+          <div class="drop-icon">📂</div>
+          <div class="drop-text">Click to browse or drag & drop</div>
+          <div class="drop-hint">Supports .xlsx and .xls files</div>
+          <div id="file-name"></div>
+        </div>
+
+        <button class="btn" id="submit-btn" disabled>Generate Teacher Tabs</button>
+      </div>
+
+      <!-- Progress section (hidden until processing) -->
+      <div id="progress-section" style="display:none;">
+        <div class="progress-label">
+          <span id="progress-message">Starting...</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        <p>
+          <strong>What this does:</strong><br />
+          Your output file will have an <strong>All Students</strong> tab with
+          all original data, plus one tab per VI Teacher showing only their
+          students — ready to share.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      const input = document.getElementById("file-input");
+      const fileNameDiv = document.getElementById("file-name");
+      const submitBtn = document.getElementById("submit-btn");
+      const dropZone = document.getElementById("drop-zone");
+      const uploadSection = document.getElementById("upload-section");
+      const progressSection = document.getElementById("progress-section");
+      const progressBar = document.getElementById("progress-bar");
+      const progressMsg = document.getElementById("progress-message");
+      const progressPct = document.getElementById("progress-pct");
+      const errorBox = document.getElementById("error-box");
+
+      input.addEventListener("change", () => {
+        if (input.files.length > 0) {
+          fileNameDiv.textContent = "✅ " + input.files[0].name;
+          submitBtn.disabled = false;
+        } else {
+          fileNameDiv.textContent = "";
+          submitBtn.disabled = true;
+        }
+      });
+
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length > 0) {
+          input.files = e.dataTransfer.files;
+          fileNameDiv.textContent = "✅ " + e.dataTransfer.files[0].name;
+          submitBtn.disabled = false;
+        }
+      });
+
+      function showError(msg) {
+        errorBox.textContent = "⚠️ " + msg;
+        errorBox.style.display = "block";
+        uploadSection.style.display = "block";
+        progressSection.style.display = "none";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Generate Teacher Tabs";
+      }
+
+      function setProgress(pct, msg) {
+        progressBar.style.width = pct + "%";
+        progressMsg.textContent = msg;
+        progressPct.textContent = pct + "%";
+      }
+
+      function pollStatus(jobId) {
+        fetch("/status/" + jobId)
+          .then((r) => r.json())
+          .then((data) => {
+            setProgress(data.progress, data.message);
+
+            if (data.status === "done") {
+              setProgress(100, "Complete! Downloading your file...");
+              window.location.href = "/download/" + jobId;
+              setTimeout(() => {
+                uploadSection.style.display = "block";
+                progressSection.style.display = "none";
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Generate Teacher Tabs";
+                fileNameDiv.textContent = "";
+                input.value = "";
+              }, 2000);
+            } else if (data.status === "error") {
+              showError(data.error || "An error occurred.");
+            } else {
+              setTimeout(() => pollStatus(jobId), 600);
+            }
+          })
+          .catch(() => setTimeout(() => pollStatus(jobId), 1000));
+      }
+
+      submitBtn.addEventListener("click", () => {
+        if (!input.files.length) return;
+        errorBox.style.display = "none";
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Processing...";
+
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+
+        uploadSection.style.display = "none";
+        progressSection.style.display = "block";
+        setProgress(0, "Uploading file...");
+
+        fetch("/process", { method: "POST", body: formData })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.error) {
+              showError(data.error);
+            } else {
+              pollStatus(data.job_id);
+            }
+          })
+          .catch(() => showError("Upload failed. Please try again."));
+      });
+    </script>
+  </body>
+</html>
