@@ -102,6 +102,21 @@ When complete, the file downloads automatically and the form resets for the next
 
 ---
 
+## Deploying to Render
+
+1. Push this project to a GitHub repository
+2. Go to [render.com](https://render.com) and create a new **Web Service**
+3. Connect your GitHub repo
+4. Use these settings:
+   - **Environment:** Python
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app`
+5. Click **Deploy** — Render handles everything else automatically
+
+> **Note:** The free tier on Render spins down after inactivity. The first request after a period of no use may be slow while it wakes up.
+
+---
+
 ## Project Structure
 
 ```
@@ -111,5 +126,7 @@ VI-Payroll/
 │   └── index.html          # Web portal UI with progress bar
 ├── static/
 │   └── styles.css          # Stylesheet
+├── requirements.txt        # Python dependencies
+├── Procfile                # Render/Gunicorn start command
 └── README.md
 ```
